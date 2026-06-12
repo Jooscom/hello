@@ -4,7 +4,6 @@ pipeline {
 
     tools{
         dockerTool 'practice_docker'
-        jdk 'JDK21_JULU'
     }
 
     environment{
@@ -13,16 +12,6 @@ pipeline {
     }
 
     stages{
-
-        stage('Spring Boot Build') {
-            steps{
-                echo 'Gradle 빌드'
-
-                // +x : 실행 권한
-                sh 'chmod +x gradlew'
-                sh './gradlew clean build -x test'
-            }
-        }
 
         stage('Docker Image Push'){
             steps{

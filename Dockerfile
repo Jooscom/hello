@@ -1,6 +1,15 @@
+FROM gradle:8-jdk21-alpine AS builder
+
+WORKDIR /build
+
+COPY . .
+
+RUN chmod -x gradlew && ./gradlew clean build -x test
+
 FROM eclipse-temurin:21-jdk-alpine
 
-# 프로젝트 루트 기준이므로 build/libs/ 안의 jar 파일을 지정합니다.
-COPY build/libs/hello-0.0.1-SNAPSHOT.jar app.jar
+WORKDIR /app
 
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+COPY --from=builder build/libs/hello-0.0.1-SNAPSHOT.jar app.jar
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
