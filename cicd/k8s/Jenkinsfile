@@ -1,0 +1,73 @@
+pipeline {
+
+    agent any
+
+    tools{
+        dockerTool 'practice_docker'
+    }
+
+    environment{
+        DOCKER_IMAGE_NAME = 'hello'
+        DOCKER_ID = 'scomjoo'
+    }
+
+    stages{
+
+        stage('Spring Boot Build') {
+            steps{
+                echo 'Gradle 빌드'
+
+                // +x : 실행 권한
+                sh 'chmod +x gradlew'
+                sh './gradlew clean build -x test'
+            }
+        }
+
+        stage('Docker Image Push'){
+            steps{
+                echo 'Docker Hub 이미지 업로드'
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'jongkuk_docker_account',
+                        usernameVariable: 'LOGIN_USER',
+                        passwordVariable: 'LOGIN_PW'
+                    )
+                ]) {
+                    sh '''
+                        echo $LOGIN_PW | docker login -u $LOGIN_USER --password-stdin
+
+                        docker build -t $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER .
+
+                        docker push $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+
+                        docker logout
+                    '''
+                }
+
+            }
+        }
+
+        stage('Deploy to k8s'){
+            steps {
+                echo '웹서버 배포'
+
+                // sh "sed 's/__BUILD_NUMBER__/${BUILD_NUMBER}/g' cicd/k8s/jongkuk_practice.yaml | kubectl apply -f -"
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "배포 성공"
+        }
+
+        failure {
+            echo "배포 실패"
+        }
+
+        always {
+            echo "파이프라인 종료"
+        }
+    }
+}

@@ -1,0 +1,121 @@
+pipeline {
+
+    agent any
+
+    environment{
+        DOCKER_IMAGE_NAME = 'hello'
+        DOCKER_ID = 'scomjoo'
+
+        WEB_SERVER = '192.168.84.10'
+    }
+
+    stages{
+
+        stage('Git Clone'){
+            steps{
+                // 젠킨스 빌드 전 워크스페이스 초기화
+                cleanWs()
+
+                echo 'GitHub 레포지토리 다운로드'
+
+                git branch: 'main', url: 'https://github.com/Jooscom/hello.git'
+            }
+        }
+
+        stage('Build') {
+            steps{
+                echo 'Gradle 빌드'
+
+                // +x : 실행 권한
+                sh 'chmod +x gradlew'
+                sh './gradlew clean build -x test'
+            }
+        }
+
+        stage('Docker Hub Push'){
+            steps{
+                echo 'Docker Hub 이미지 업로드'
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'docker_hub_account',
+                        usernameVariable: 'LOGIN_USER',
+                        passwordVariable: 'LOGIN_PW'
+                    )
+                ]) {
+                    sh '''
+                        echo $LOGIN_PW | docker login -u $LOGIN_USER --password-stdin
+
+                        docker build -t $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER .
+
+                        docker push $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+
+                        docker logout
+                    '''
+                }
+
+            }
+        }
+
+        stage('Deploy'){
+            steps {
+                echo '웹서버 배포'
+
+                sshagent(credentials: ['jenkins-deploy-key']){
+                    sh """
+                        # StrictHostKeyChecking=no : 보안 경고 무시
+                        ssh -o StrictHostKeyChecking=no jong@$WEB_SERVER "
+                            # VM01 SSH 내부
+                            docker stop $DOCKER_IMAGE_NAME || true
+                            docker rm $DOCKER_IMAGE_NAME || true
+
+                            docker pull $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+
+                            docker run -d --name $DOCKER_IMAGE_NAME -p 8080:8080 $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+
+                            # docker image prune -f
+                        "
+                    """
+                }
+
+/*
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm01_user_pw',
+                        usernameVariable: 'VM_ID',
+                        passwordVariable: 'VM_PW')
+                ]) {
+                    sh '''
+                        # StrictHostKeyChecking=no : 보안 경고 무시
+                        sshpass -p "$VM_PW" ssh -o StrictHostKeyChecking=no $VM_ID@$WEB_SERVER "
+                            # VM01 SSH 내부
+                            docker stop $DOCKER_IMAGE_NAME || true
+                            docker rm $DOCKER_IMAGE_NAME || true
+
+                            docker pull $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+
+                            docker run -d --name $DOCKER_IMAGE_NAME -p 8080:8080 $DOCKER_ID/$DOCKER_IMAGE_NAME:$BUILD_NUMBER
+
+                            # docker image prune -f
+                        "
+                    '''
+                }
+*/
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "배포 성공"
+        }
+
+        failure {
+            echo "배포 실패"
+        }
+
+        always {
+            echo "파이프라인 종료"
+        }
+    }
+}
