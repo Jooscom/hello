@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment{
-        DOCKER_IMAGE_NAME = 'hello'
+        DOCKER_IMAGE_NAME = 'hello_k8s'
         DOCKER_ID = 'scomjoo'
     }
 
